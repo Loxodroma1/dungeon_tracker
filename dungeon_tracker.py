@@ -15,6 +15,7 @@ from pathlib import Path
 import re
 import sys
 import schedule
+import os
 
 class DungeonPointsTracker:
     def __init__(self, data_file="dungeon_data.json", csv_file="dungeon_changes.csv", 
@@ -24,10 +25,13 @@ class DungeonPointsTracker:
         self.csv_file = Path(csv_file)
         self.dungeon_map_file = Path(dungeon_map_file)
         
+        # Detekce CI prostředí (GitHub Actions, atd.)
+        self.is_ci = os.environ.get('CI') == 'true' or os.environ.get('GITHUB_ACTIONS') == 'true'
+        
         # Načti mapování dungeonů
         self.dungeon_map = self._load_dungeon_map()
         
-        # Zkontroluj zda můžeme zapisovat do složky
+        # Zkontroluj zda můžeš zapisovat do složky
         self._check_write_permissions()
         
         self.history = self._load_history()
@@ -86,7 +90,6 @@ class DungeonPointsTracker:
         except PermissionError:
             print(f"❌ CHYBA: Nemáte práva zápisu do složky: {self.data_file.parent}")
             print(f"💡 TIP: Přesuňte skript do jiné složky (např. Documents)")
-            input("Stiskněte Enter pro ukončení...")
             sys.exit(1)
     
     def _init_csv(self):
@@ -101,7 +104,6 @@ class DungeonPointsTracker:
             except PermissionError:
                 print(f"❌ CHYBA: Nelze vytvořit CSV soubor: {self.csv_file}")
                 print(f"   Zavřete Excel pokud máte soubor otevřený!")
-                input("Stiskněte Enter pro ukončení...")
                 sys.exit(1)
     
     def _load_history(self):
@@ -389,25 +391,29 @@ def main():
     debug = '--debug' in sys.argv
     manual = '--manual' in sys.argv
     
+    # Detekce CI prostředí
+    is_ci = os.environ.get('CI') == 'true' or os.environ.get('GITHUB_ACTIONS') == 'true'
+    
     tracker = DungeonPointsTracker()
     
     print("🚀 Dungeon Points Tracker - AUTOMATICKÉ SBÍRÁNÍ")
     print("="*80)
     if debug:
         print("🔍 DEBUG REŽIM AKTIVNÍ")
+    if is_ci:
+        print("🤖 Běží v CI prostředí (GitHub Actions)")
     print(f"📁 Složka: {Path.cwd()}")
     print(f"📄 JSON historie: dungeon_data.json")
     print(f"📊 CSV výstup: dungeon_changes.csv")
-    print(f"🗺️  Mapa dungeonů: Dungeony2.csv")
+    print(f"🗺️ Mapa dungeonů: Dungeony2.csv")
     print(f"⏰ Interval: každé 3 hodiny")
     print("="*80)
     
-    if manual:
-        # Ruční režim - spustí jednou a ukončí
-        print("\n📝 RUČNÍ REŽIM - Spuštění jednou")
+    if manual or is_ci:
+        # Ruční režim nebo CI - spustí jednou a ukončí
+        print("\n🔧 RUČNÍ REŽIM - Spuštění jednou")
         tracker.update(debug=debug)
         print("\n✅ HOTOVO!")
-        input("\nStiskněte Enter pro ukončení...")
         return
     
     # Automatický režim
