@@ -2,6 +2,7 @@
 """
 Dungeon Points Tracker - AUTOMATICKÉ SBÍRÁNÍ každé 3 hodiny
 Stahuje data z Dark Paradise a zapisuje změny do CSV s názvem dungeonu
++ Denní vyhodnocení aktivních dungeonů
 """
 
 from selenium import webdriver
@@ -10,12 +11,13 @@ from selenium.webdriver.chrome.options import Options
 import json
 import csv
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 import re
 import sys
 import schedule
 import os
+from collections import defaultdict
 
 class DungeonPointsTracker:
     def __init__(self, data_file="dungeon_data.json", csv_file="dungeon_changes.csv", 
@@ -296,6 +298,124 @@ class DungeonPointsTracker:
         except PermissionError:
             print(f"❌ CHYBA: Nelze zapsat do CSV - zavřete Excel!")
     
+    def generate_daily_dungeon_report(self):
+        """Vygeneruje denní report o aktivitě dungeonů"""
+        if not self.csv_file.exists():
+            print("⚠️ CSV soubor neexistuje, není co vyhodnocovat")
+            return
+        
+        try:
+            # Načti všechny záznamy z CSV
+            dungeon_last_activity = {}  # {dungeon_name: (timestamp, count)}
+            
+            with open(self.csv_file, 'r', encoding='utf-8') as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    dungeon = row['Dungeon'].strip()
+                    timestamp_str = row['Timestamp'].strip()
+                    change = int(row['Změna'])
+                    
+                    # Ignoruj ztráty bodů a neznámé dungeony
+                    if change <= 0 or dungeon == "Ztráta bodů":
+                        continue
+                    
+                    try:
+                        timestamp = datetime.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S')
+                        
+                        # Aktualizuj poslední aktivitu dungeonu
+                        if dungeon not in dungeon_last_activity:
+                            dungeon_last_activity[dungeon] = {'timestamp': timestamp, 'count': 0}
+                        
+                        if timestamp > dungeon_last_activity[dungeon]['timestamp']:
+                            dungeon_last_activity[dungeon]['timestamp'] = timestamp
+                        
+                        dungeon_last_activity[dungeon]['count'] += 1
+                        
+                    except ValueError:
+                        continue
+            
+            # Vytiskni report
+            now = datetime.now()
+            print("\n" + "="*100)
+            print(f"📊 DENNÍ VYHODNOCENÍ DUNGEONŮ - {now.strftime('%Y-%m-%d %H:%M:%S')}")
+            print("="*100)
+            
+            if not dungeon_last_activity:
+                print("\n⚠️ Zatím nebyly zaznamenány žádné změny v dungeonech")
+                print("="*100 + "\n")
+                return
+            
+            # Seřaď podle poslední aktivity (od nejnovější)
+            sorted_dungeons = sorted(
+                dungeon_last_activity.items(),
+                key=lambda x: x[1]['timestamp'],
+                reverse=True
+            )
+            
+            print(f"\n📋 Celkem sledováno dungeonů: {len(sorted_dungeons)}")
+            print("\n" + "-"*100)
+            print(f"{'DUNGEON':<40} {'POSLEDNÍ AKTIVITA':<25} {'PŘED':<20} {'POČET DOKONČENÍ':<15}")
+            print("-"*100)
+            
+            for dungeon, info in sorted_dungeons:
+                last_time = info['timestamp']
+                count = info['count']
+                time_ago = now - last_time
+                
+                # Formátuj "před X čas"
+                if time_ago.days > 0:
+                    time_ago_str = f"{time_ago.days} dny" if time_ago.days > 1 else "1 den"
+                    if time_ago.days >= 7:
+                        weeks = time_ago.days // 7
+                        time_ago_str = f"{weeks} týdny" if weeks > 1 else "1 týden"
+                else:
+                    hours = time_ago.seconds // 3600
+                    if hours > 0:
+                        time_ago_str = f"{hours} hodin" if hours > 1 else "1 hodina"
+                    else:
+                        minutes = time_ago.seconds // 60
+                        time_ago_str = f"{minutes} minut" if minutes > 1 else "1 minuta"
+                
+                # Ikona podle aktivity
+                if time_ago.days == 0 and time_ago.seconds < 3600 * 6:  # méně než 6 hodin
+                    icon = "🔥"  # velmi aktivní
+                elif time_ago.days == 0:
+                    icon = "✅"  # aktivní dnes
+                elif time_ago.days <= 1:
+                    icon = "🕐"  # včera
+                elif time_ago.days <= 7:
+                    icon = "📅"  # tento týden
+                else:
+                    icon = "❄️"  # neaktivní
+                
+                print(f"{icon} {dungeon:<38} {last_time.strftime('%Y-%m-%d %H:%M:%S'):<25} "
+                      f"{time_ago_str:<20} {count:>15}x")
+            
+            print("-"*100)
+            
+            # Statistiky
+            total_completions = sum(info['count'] for info in dungeon_last_activity.values())
+            recent_24h = sum(1 for info in dungeon_last_activity.values() 
+                           if (now - info['timestamp']).days == 0)
+            recent_week = sum(1 for info in dungeon_last_activity.values() 
+                            if (now - info['timestamp']).days <= 7)
+            
+            print(f"\n📈 STATISTIKY:")
+            print(f"   Celkový počet dokončení: {total_completions}x")
+            print(f"   Aktivní dungeonů dnes: {recent_24h}")
+            print(f"   Aktivní dungeonů tento týden: {recent_week}")
+            
+            # Najdi nejvíce aktivní dungeon
+            most_active = max(sorted_dungeons, key=lambda x: x[1]['count'])
+            print(f"   Nejčastější dungeon: {most_active[0]} ({most_active[1]['count']}x)")
+            
+            print("\n" + "="*100 + "\n")
+            
+        except Exception as e:
+            print(f"❌ Chyba při generování denního reportu: {e}")
+            import traceback
+            traceback.print_exc()
+    
     def print_report(self, data, diff):
         """Vytiskne report s dungeony"""
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -386,10 +506,22 @@ def run_scheduled_update(tracker, debug=False):
         import traceback
         traceback.print_exc()
 
+def run_daily_report(tracker):
+    """Spustí denní report a ošetří chyby"""
+    try:
+        tracker.generate_daily_dungeon_report()
+    except KeyboardInterrupt:
+        raise
+    except Exception as e:
+        print(f"\n❌ Chyba při generování denního reportu: {e}")
+        import traceback
+        traceback.print_exc()
+
 def main():
-    """Hlavní funkce - automatické spouštění každé 3 hodiny"""
+    """Hlavní funkce - automatické spouštění každé 3 hodiny + denní report"""
     debug = '--debug' in sys.argv
     manual = '--manual' in sys.argv
+    daily_report_only = '--daily-report' in sys.argv
     
     # Detekce CI prostředí
     is_ci = os.environ.get('CI') == 'true' or os.environ.get('GITHUB_ACTIONS') == 'true'
@@ -407,7 +539,15 @@ def main():
     print(f"📊 CSV výstup: dungeon_changes.csv")
     print(f"🗺️ Mapa dungeonů: Dungeony2.csv")
     print(f"⏰ Interval: každé 3 hodiny")
+    print(f"📅 Denní report: každých 24 hodin")
     print("="*80)
+    
+    # Pouze denní report
+    if daily_report_only:
+        print("\n📊 REŽIM DENNÍHO REPORTU")
+        tracker.generate_daily_dungeon_report()
+        print("\n✅ HOTOVO!")
+        return
     
     if manual or is_ci:
         # Ruční režim nebo CI - spustí jednou a ukončí
@@ -425,13 +565,23 @@ def main():
     print("\n🎯 Spouštím první kontrolu...")
     run_scheduled_update(tracker, debug)
     
-    # Naplánuj další spouštění každé 3 hodiny
+    # První denní report ihned
+    print("\n📊 Spouštím první denní report...")
+    run_daily_report(tracker)
+    
+    # Naplánuj další spuštění každé 3 hodiny
     schedule.every(3).hours.do(run_scheduled_update, tracker, debug)
     
+    # Naplánuj denní report každých 24 hodin
+    schedule.every(24).hours.do(run_daily_report, tracker)
+    
     next_run = datetime.now().replace(microsecond=0)
-    from datetime import timedelta
     next_run += timedelta(hours=3)
+    next_daily = datetime.now().replace(microsecond=0)
+    next_daily += timedelta(hours=24)
+    
     print(f"\n⏰ Další kontrola naplánována na: {next_run.strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"📅 Další denní report naplánován na: {next_daily.strftime('%Y-%m-%d %H:%M:%S')}")
     print("="*80)
     
     try:
