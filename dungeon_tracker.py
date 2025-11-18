@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Dungeon Points Tracker - AUTOMATICKÉ SBÍRÁNÍ každé 3 hodiny
+Dungeon Points Tracker - AUTOMATICKÉ SBÍRÁNÍ každé 2 hodiny
 Stahuje data z Dark Paradise a zapisuje změny do CSV s názvem dungeonu
 + Denní vyhodnocení aktivních dungeonů
 """
@@ -518,7 +518,7 @@ def run_daily_report(tracker):
         traceback.print_exc()
 
 def main():
-    """Hlavní funkce - automatické spouštění každé 3 hodiny + denní report"""
+    """Hlavní funkce - automatické spouštění každé 2 hodiny + denní report"""
     debug = '--debug' in sys.argv
     manual = '--manual' in sys.argv
     daily_report_only = '--daily-report' in sys.argv
@@ -538,7 +538,7 @@ def main():
     print(f"📄 JSON historie: dungeon_data.json")
     print(f"📊 CSV výstup: dungeon_changes.csv")
     print(f"🗺️ Mapa dungeonů: Dungeony2.csv")
-    print(f"⏰ Interval: každé 3 hodiny")
+    print(f"⏰ Interval: každé 2 hodiny")
     print(f"📅 Denní report: každých 24 hodin")
     print("="*80)
     
@@ -569,14 +569,14 @@ def main():
     print("\n📊 Spouštím první denní report...")
     run_daily_report(tracker)
     
-    # Naplánuj další spuštění každé 3 hodiny
-    schedule.every(3).hours.do(run_scheduled_update, tracker, debug)
+    # Naplánuj další spuštění každé 2 hodiny
+    schedule.every(2).hours.do(run_scheduled_update, tracker, debug)
     
     # Naplánuj denní report každých 24 hodin
     schedule.every(24).hours.do(run_daily_report, tracker)
     
     next_run = datetime.now().replace(microsecond=0)
-    next_run += timedelta(hours=3)
+    next_run += timedelta(hours=2)
     next_daily = datetime.now().replace(microsecond=0)
     next_daily += timedelta(hours=24)
     
