@@ -1,60 +1,65 @@
 Dung,Dung body (plast)
 Abyss,11
-Ankh 1,
-Ankh 2,
+Ankh 1,3
+Ankh 2,3
 Ankh 3,7
 Blood,5
-Cave of Madness - Demon,
-Cave of Madness - Pavouk,1
-Cave of Madness - Dung,
-Citadela,12
-Covetous,
-Cyclop Dungeon,
-Cyclops Valley,
-Doom,
-Deceit,1
-Despise 1,
-Despise 2,
-Despise 3,
+CoM easy pavouk, 3
+CoM hard pavouk,13
+CoM easy demon,5
+CoM hard demon,13
+Citadela,13
+Covetous,5
+Cyclop Dungeon,3
+Cyclops Valley,3
+Doom,2
+Deceit,2
+Despise 1,9
+Despise 2,25
+Despise 3,30
 Despise 4,
-Destard 1+2,4
-Destard 2+3,
-Dragon City,
-Drow City,4
-Elemental Planes 1 (water),
-Elemental Planes 2 (earth),
-Fire,
-Fan Dancer Dojo,4
-Fanatic Caves,
-Fortress of Despair,
-Heroic Temple,
+Destard 1,2
+Destard 2,5
+Destard 3,13
+Dragon City,9
+Drow City,5
+Elemental Planes 1 (water),5
+Elemental Planes 2 (earth),13
+Elemental Planes 3,30
+Fire,13
+Fan Dancer Dojo,2
+Fanatic Caves,5
+Fortress of Despair,9
+Heroic Temple,5
+Heroic Temple nesmrtelná,7
 Hythloth,3
 Ice Dungeon 1,1
-Ice Dungeon 2,
-Ophodian lair,
-Poisoned River 1,
-Poisoned River 2,4
-Poisoned River 3,
+Ice Dungeon 2,3
+Ity,2
+Ophodian lair,9
+Poisoned River 1,2
+Poisoned River 2,3
+Poisoned River 3,7
 Pride Rise,13
 Pride Peklo,25
-Pride Ocistec,9
-Ratman Mines,10
-Shame,
+Pride Ocistec,7
+Ratman Mines,9
+Shame,7
 Sopka,
-Sorcerer's Dungeon,
+Sorcerer's Dungeon,14
 Soulshard Dung,1
 Tajuplna Jeskyne,
 Terathran Keep,2
 Terra Sanctum,
 Tripartita,10
-Timed dungeon,
-Underground Quagmire 1,
-Underground Quagmire 2,
+Timed dungeon,1
+Underground Quagmire 1,1
+Underground Quagmire 2,1
 Underground Quagmire 3,3
-Vestirna Osath,
+Vestirna Osath,9
 Water,
-Wisp 1,
-Wisp 2,
-Wrong,
-Yomotsu Mines 1,
+Wisp 1,1
+Wisp 2,3
+Wrong,2
+Yomotsu Mines 1,2
 Yomotsu Mines 2,9
