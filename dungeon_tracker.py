@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """
 Dungeon Points Tracker - AUTOMATICKÉ SBÍRÁNÍ každé 2 hodiny
-Stahuje data z Dark Paradise a zapisuje změny do CSV s názvem dungeonu
-+ Denní vyhodnocení aktivních dungeonů
++ Denní a týdenní vyhodnocení dungeonů do CSV
 """
 
 from selenium import webdriver
@@ -21,13 +20,14 @@ from collections import defaultdict
 
 class DungeonPointsTracker:
     def __init__(self, data_file="dungeon_data.json", csv_file="dungeon_changes.csv", 
-                 dungeon_map_file="Dungeony2.csv"):
+                 dungeon_map_file="Dungeony2.csv", summary_file="dungeony_souhrn.csv"):
         self.url = "https://www.darkparadise.eu/dungeon-points"
         self.data_file = Path(data_file)
         self.csv_file = Path(csv_file)
         self.dungeon_map_file = Path(dungeon_map_file)
+        self.summary_file = Path(summary_file)
         
-        # Detekce CI prostředí (GitHub Actions, atd.)
+        # Detekce CI prostředí
         self.is_ci = os.environ.get('CI') == 'true' or os.environ.get('GITHUB_ACTIONS') == 'true'
         
         # Načti mapování dungeonů
@@ -38,14 +38,14 @@ class DungeonPointsTracker:
         
         self.history = self._load_history()
         self._init_csv()
+        self._init_summary_csv()
     
     def _load_dungeon_map(self):
         """Načte mapování bodů na dungeony z CSV"""
-        dungeon_map = {}  # {body: [seznam dungeonů]}
+        dungeon_map = {}
         
         if not self.dungeon_map_file.exists():
             print(f"⚠️ VAROVÁNÍ: Soubor {self.dungeon_map_file} nenalezen!")
-            print(f"   Vytvořte soubor Dungeony2.csv ve stejné složce jako skript.")
             return dungeon_map
         
         try:
@@ -55,7 +55,7 @@ class DungeonPointsTracker:
                     dungeon_name = row['Dung'].strip()
                     points_str = row['Dung body (plast)'].strip()
                     
-                    if points_str:  # Pokud má hodnotu
+                    if points_str:
                         try:
                             points = int(points_str)
                             if points not in dungeon_map:
@@ -80,7 +80,6 @@ class DungeonPointsTracker:
         if len(dungeons) == 1:
             return dungeons[0]
         else:
-            # Více možností - vrátíme je oddělené " / "
             return " / ".join(dungeons)
     
     def _check_write_permissions(self):
@@ -91,7 +90,6 @@ class DungeonPointsTracker:
             test_file.unlink()
         except PermissionError:
             print(f"❌ CHYBA: Nemáte práva zápisu do složky: {self.data_file.parent}")
-            print(f"💡 TIP: Přesuňte skript do jiné složky (např. Documents)")
             sys.exit(1)
     
     def _init_csv(self):
@@ -105,7 +103,19 @@ class DungeonPointsTracker:
                 print(f"✅ Vytvořen nový CSV soubor: {self.csv_file}")
             except PermissionError:
                 print(f"❌ CHYBA: Nelze vytvořit CSV soubor: {self.csv_file}")
-                print(f"   Zavřete Excel pokud máte soubor otevřený!")
+                sys.exit(1)
+    
+    def _init_summary_csv(self):
+        """Inicializuje souhrnný CSV soubor"""
+        if not self.summary_file.exists():
+            try:
+                with open(self.summary_file, 'w', newline='', encoding='utf-8') as f:
+                    writer = csv.writer(f)
+                    writer.writerow(['Období', 'Typ', 'Od', 'Do', 'Dungeon', 
+                                   'Počet dokončení', 'Hráči (seznam)', 'Časy dokončení'])
+                print(f"✅ Vytvořen souhrnný CSV: {self.summary_file}")
+            except PermissionError:
+                print(f"❌ CHYBA: Nelze vytvořit souhrnný CSV: {self.summary_file}")
                 sys.exit(1)
     
     def _load_history(self):
@@ -115,14 +125,7 @@ class DungeonPointsTracker:
                 with open(self.data_file, 'r', encoding='utf-8') as f:
                     return json.load(f)
             except (json.JSONDecodeError, PermissionError) as e:
-                print(f"⚠️ Varování: Nelze načíst historii z {self.data_file}: {e}")
-                backup_file = self.data_file.with_suffix('.json.bak')
-                try:
-                    if self.data_file.exists():
-                        self.data_file.rename(backup_file)
-                        print(f"📦 Vadný soubor přejmenován na: {backup_file}")
-                except Exception:
-                    pass
+                print(f"⚠️ Varování: Nelze načíst historii: {e}")
                 return []
         return []
     
@@ -146,7 +149,6 @@ class DungeonPointsTracker:
                     time.sleep(2)
                 else:
                     print(f"❌ CHYBA: Nelze uložit po {max_attempts} pokusech")
-                    print(f"   Zavřete programy co mohou mít soubor otevřený!")
             except Exception as e:
                 print(f"❌ Chyba při ukládání: {e}")
                 break
@@ -178,9 +180,6 @@ class DungeonPointsTracker:
             
             page_text = driver.find_element(By.TAG_NAME, "body").text
             
-            if debug:
-                print(f"\n📄 Obsah stránky:\n{page_text[:500]}...\n")
-            
             data = {}
             tables = driver.find_elements(By.TAG_NAME, "table")
             print(f"🔍 Nalezeno tabulek: {len(tables)}")
@@ -188,16 +187,11 @@ class DungeonPointsTracker:
             if tables:
                 for idx, table in enumerate(tables):
                     rows = table.find_elements(By.TAG_NAME, "tr")
-                    print(f"🔍 Tabulka {idx+1}: {len(rows)} řádků")
                     
-                    for row_idx, row in enumerate(rows):
+                    for row in rows:
                         cells = row.find_elements(By.TAG_NAME, "td")
                         if not cells:
                             cells = row.find_elements(By.TAG_NAME, "th")
-                        
-                        if row_idx < 5 and debug:
-                            cell_texts = [cell.text.strip() for cell in cells]
-                            print(f"  Řádek {row_idx}: {cell_texts}")
                         
                         if len(cells) >= 3:
                             player = cells[1].text.strip()
@@ -210,23 +204,8 @@ class DungeonPointsTracker:
                                     points_value = int(points_match.group())
                                     if points_value > 0:
                                         data[player] = points_value
-                                        if len(data) <= 3:
-                                            print(f"  ✅ {player} = {points_value}")
                                 except ValueError:
                                     continue
-            else:
-                print("⚠️ Žádné tabulky, zkouším parsovat text...")
-                lines = page_text.split('\n')
-                
-                for line in lines:
-                    match = re.match(r'(.+?)\s+(\d+)\s*$', line.strip())
-                    if match:
-                        player = match.group(1).strip()
-                        points = int(match.group(2))
-                        if points > 100:
-                            data[player] = points
-                            if debug and len(data) <= 3:
-                                print(f"  Parsováno: {player} = {points}")
             
             return data
         
@@ -254,7 +233,6 @@ class DungeonPointsTracker:
             change = new_points - old_points
             
             if change != 0:
-                # Určení dungeonu podle změny bodů
                 if change > 0:
                     dungeon = self._get_dungeon_name(change)
                 else:
@@ -298,15 +276,171 @@ class DungeonPointsTracker:
         except PermissionError:
             print(f"❌ CHYBA: Nelze zapsat do CSV - zavřete Excel!")
     
-    def generate_daily_dungeon_report(self):
-        """Vygeneruje denní report o aktivitě dungeonů"""
+    def generate_daily_summary(self):
+        """Generuje denní souhrn dungeonů"""
         if not self.csv_file.exists():
-            print("⚠️ CSV soubor neexistuje, není co vyhodnocovat")
+            print("⚠️ CSV soubor neexistuje")
             return
         
         try:
-            # Načti všechny záznamy z CSV
-            dungeon_last_activity = {}  # {dungeon_name: (timestamp, count)}
+            today = datetime.now().date()
+            yesterday = today - timedelta(days=1)
+            
+            # Načti včerejší data
+            dungeon_stats = defaultdict(lambda: {'count': 0, 'players': [], 'times': []})
+            
+            with open(self.csv_file, 'r', encoding='utf-8') as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    try:
+                        timestamp = datetime.strptime(row['Timestamp'], '%Y-%m-%d %H:%M:%S')
+                        change = int(row['Změna'])
+                        
+                        if timestamp.date() == yesterday and change > 0:
+                            dungeon = row['Dungeon']
+                            player = row['Hráč']
+                            time_str = row['Čas']
+                            
+                            if dungeon != "Ztráta bodů":
+                                dungeon_stats[dungeon]['count'] += 1
+                                dungeon_stats[dungeon]['players'].append(player)
+                                dungeon_stats[dungeon]['times'].append(time_str)
+                    except (ValueError, KeyError):
+                        continue
+            
+            if not dungeon_stats:
+                print(f"📊 Včera ({yesterday}) nebyly dokončeny žádné dungeony")
+                return
+            
+            # Zapiš do souhrnného CSV
+            with open(self.summary_file, 'a', newline='', encoding='utf-8') as f:
+                writer = csv.writer(f)
+                
+                for dungeon, stats in sorted(dungeon_stats.items()):
+                    players_str = ', '.join(stats['players'])
+                    times_str = ', '.join(stats['times'])
+                    
+                    writer.writerow([
+                        yesterday.strftime('%Y-%m-%d'),
+                        'DENNÍ',
+                        yesterday.strftime('%Y-%m-%d'),
+                        yesterday.strftime('%Y-%m-%d'),
+                        dungeon,
+                        stats['count'],
+                        players_str,
+                        times_str
+                    ])
+            
+            print(f"\n{'='*100}")
+            print(f"📅 DENNÍ SOUHRN - {yesterday.strftime('%Y-%m-%d')}")
+            print(f"{'='*100}")
+            
+            for dungeon, stats in sorted(dungeon_stats.items(), key=lambda x: x[1]['count'], reverse=True):
+                print(f"🏰 {dungeon}")
+                print(f"   Počet dokončení: {stats['count']}x")
+                print(f"   Hráči: {', '.join(stats['players'])}")
+                print(f"   Časy: {', '.join(stats['times'])}")
+                print()
+            
+            print(f"✅ Denní souhrn uložen do {self.summary_file}")
+            print(f"{'='*100}\n")
+            
+        except Exception as e:
+            print(f"❌ Chyba při generování denního souhrnu: {e}")
+            import traceback
+            traceback.print_exc()
+    
+    def generate_weekly_summary(self):
+        """Generuje týdenní souhrn dungeonů"""
+        if not self.csv_file.exists():
+            print("⚠️ CSV soubor neexistuje")
+            return
+        
+        try:
+            today = datetime.now().date()
+            week_start = today - timedelta(days=today.weekday() + 7)  # Minulé pondělí
+            week_end = week_start + timedelta(days=6)  # Minulá neděle
+            
+            # Načti data za celý minulý týden
+            dungeon_stats = defaultdict(lambda: {'count': 0, 'players': [], 'times': []})
+            
+            with open(self.csv_file, 'r', encoding='utf-8') as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    try:
+                        timestamp = datetime.strptime(row['Timestamp'], '%Y-%m-%d %H:%M:%S')
+                        change = int(row['Změna'])
+                        
+                        if week_start <= timestamp.date() <= week_end and change > 0:
+                            dungeon = row['Dungeon']
+                            player = row['Hráč']
+                            time_str = f"{row['Datum']} {row['Čas']}"
+                            
+                            if dungeon != "Ztráta bodů":
+                                dungeon_stats[dungeon]['count'] += 1
+                                dungeon_stats[dungeon]['players'].append(player)
+                                dungeon_stats[dungeon]['times'].append(time_str)
+                    except (ValueError, KeyError):
+                        continue
+            
+            if not dungeon_stats:
+                print(f"📊 Minulý týden ({week_start} - {week_end}) nebyly dokončeny žádné dungeony")
+                return
+            
+            # Zapiš do souhrnného CSV
+            with open(self.summary_file, 'a', newline='', encoding='utf-8') as f:
+                writer = csv.writer(f)
+                
+                for dungeon, stats in sorted(dungeon_stats.items()):
+                    players_str = ', '.join(stats['players'])
+                    times_str = '; '.join(stats['times'])
+                    
+                    writer.writerow([
+                        f"Týden {week_start.isocalendar()[1]}",
+                        'TÝDENNÍ',
+                        week_start.strftime('%Y-%m-%d'),
+                        week_end.strftime('%Y-%m-%d'),
+                        dungeon,
+                        stats['count'],
+                        players_str,
+                        times_str
+                    ])
+            
+            print(f"\n{'='*100}")
+            print(f"📅 TÝDENNÍ SOUHRN - Týden {week_start.isocalendar()[1]} ({week_start} až {week_end})")
+            print(f"{'='*100}")
+            
+            total_completions = 0
+            for dungeon, stats in sorted(dungeon_stats.items(), key=lambda x: x[1]['count'], reverse=True):
+                total_completions += stats['count']
+                unique_players = len(set(stats['players']))
+                
+                print(f"🏰 {dungeon}")
+                print(f"   Počet dokončení: {stats['count']}x")
+                print(f"   Různých hráčů: {unique_players}")
+                print(f"   Hráči: {', '.join(set(stats['players']))}")
+                print()
+            
+            print(f"📈 CELKOVÁ STATISTIKA TÝDNE:")
+            print(f"   Celkem dokončení: {total_completions}x")
+            print(f"   Různých dungeonů: {len(dungeon_stats)}")
+            
+            print(f"\n✅ Týdenní souhrn uložen do {self.summary_file}")
+            print(f"{'='*100}\n")
+            
+        except Exception as e:
+            print(f"❌ Chyba při generování týdenního souhrnu: {e}")
+            import traceback
+            traceback.print_exc()
+    
+    def generate_daily_dungeon_report(self):
+        """Vygeneruje denní report o aktivitě dungeonů (původní funkce)"""
+        if not self.csv_file.exists():
+            print("⚠️ CSV soubor neexistuje")
+            return
+        
+        try:
+            dungeon_last_activity = {}
             
             with open(self.csv_file, 'r', encoding='utf-8') as f:
                 reader = csv.DictReader(f)
@@ -315,14 +449,12 @@ class DungeonPointsTracker:
                     timestamp_str = row['Timestamp'].strip()
                     change = int(row['Změna'])
                     
-                    # Ignoruj ztráty bodů a neznámé dungeony
                     if change <= 0 or dungeon == "Ztráta bodů":
                         continue
                     
                     try:
                         timestamp = datetime.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S')
                         
-                        # Aktualizuj poslední aktivitu dungeonu
                         if dungeon not in dungeon_last_activity:
                             dungeon_last_activity[dungeon] = {'timestamp': timestamp, 'count': 0}
                         
@@ -334,18 +466,16 @@ class DungeonPointsTracker:
                     except ValueError:
                         continue
             
-            # Vytiskni report
             now = datetime.now()
             print("\n" + "="*100)
             print(f"📊 DENNÍ VYHODNOCENÍ DUNGEONŮ - {now.strftime('%Y-%m-%d %H:%M:%S')}")
             print("="*100)
             
             if not dungeon_last_activity:
-                print("\n⚠️ Zatím nebyly zaznamenány žádné změny v dungeonech")
+                print("\n⚠️ Zatím nebyly zaznamenány žádné změny")
                 print("="*100 + "\n")
                 return
             
-            # Seřaď podle poslední aktivity (od nejnovější)
             sorted_dungeons = sorted(
                 dungeon_last_activity.items(),
                 key=lambda x: x[1]['timestamp'],
@@ -362,7 +492,6 @@ class DungeonPointsTracker:
                 count = info['count']
                 time_ago = now - last_time
                 
-                # Formátuj "před X čas"
                 if time_ago.days > 0:
                     time_ago_str = f"{time_ago.days} dny" if time_ago.days > 1 else "1 den"
                     if time_ago.days >= 7:
@@ -376,24 +505,22 @@ class DungeonPointsTracker:
                         minutes = time_ago.seconds // 60
                         time_ago_str = f"{minutes} minut" if minutes > 1 else "1 minuta"
                 
-                # Ikona podle aktivity
-                if time_ago.days == 0 and time_ago.seconds < 3600 * 6:  # méně než 6 hodin
-                    icon = "🔥"  # velmi aktivní
+                if time_ago.days == 0 and time_ago.seconds < 3600 * 6:
+                    icon = "🔥"
                 elif time_ago.days == 0:
-                    icon = "✅"  # aktivní dnes
+                    icon = "✅"
                 elif time_ago.days <= 1:
-                    icon = "🕐"  # včera
+                    icon = "🕐"
                 elif time_ago.days <= 7:
-                    icon = "📅"  # tento týden
+                    icon = "📅"
                 else:
-                    icon = "❄️"  # neaktivní
+                    icon = "❄️"
                 
                 print(f"{icon} {dungeon:<38} {last_time.strftime('%Y-%m-%d %H:%M:%S'):<25} "
                       f"{time_ago_str:<20} {count:>15}x")
             
             print("-"*100)
             
-            # Statistiky
             total_completions = sum(info['count'] for info in dungeon_last_activity.values())
             recent_24h = sum(1 for info in dungeon_last_activity.values() 
                            if (now - info['timestamp']).days == 0)
@@ -405,7 +532,6 @@ class DungeonPointsTracker:
             print(f"   Aktivní dungeonů dnes: {recent_24h}")
             print(f"   Aktivní dungeonů tento týden: {recent_week}")
             
-            # Najdi nejvíce aktivní dungeon
             most_active = max(sorted_dungeons, key=lambda x: x[1]['count'])
             print(f"   Nejčastější dungeon: {most_active[0]} ({most_active[1]['count']}x)")
             
@@ -467,7 +593,7 @@ class DungeonPointsTracker:
         new_data = self.fetch_data(debug=debug)
         
         if new_data is None:
-            print("❌ Stahování selhalo, zkusím to příště")
+            print("❌ Stahování selhalo")
             return
         
         if not new_data:
@@ -507,92 +633,49 @@ def run_scheduled_update(tracker, debug=False):
         traceback.print_exc()
 
 def run_daily_report(tracker):
-    """Spustí denní report a ošetří chyby"""
+    """Spustí denní report"""
     try:
         tracker.generate_daily_dungeon_report()
     except KeyboardInterrupt:
         raise
     except Exception as e:
-        print(f"\n❌ Chyba při generování denního reportu: {e}")
+        print(f"\n❌ Chyba při denním reportu: {e}")
+        import traceback
+        traceback.print_exc()
+
+def run_daily_summary(tracker):
+    """Spustí denní souhrn"""
+    try:
+        tracker.generate_daily_summary()
+    except KeyboardInterrupt:
+        raise
+    except Exception as e:
+        print(f"\n❌ Chyba při denním souhrnu: {e}")
+        import traceback
+        traceback.print_exc()
+
+def run_weekly_summary(tracker):
+    """Spustí týdenní souhrn"""
+    try:
+        tracker.generate_weekly_summary()
+    except KeyboardInterrupt:
+        raise
+    except Exception as e:
+        print(f"\n❌ Chyba při týdenním souhrnu: {e}")
         import traceback
         traceback.print_exc()
 
 def main():
-    """Hlavní funkce - automatické spouštění každé 2 hodiny + denní report"""
+    """Hlavní funkce"""
     debug = '--debug' in sys.argv
     manual = '--manual' in sys.argv
     daily_report_only = '--daily-report' in sys.argv
+    daily_summary_only = '--daily-summary' in sys.argv
+    weekly_summary_only = '--weekly-summary' in sys.argv
     
-    # Detekce CI prostředí
     is_ci = os.environ.get('CI') == 'true' or os.environ.get('GITHUB_ACTIONS') == 'true'
     
     tracker = DungeonPointsTracker()
     
     print("🚀 Dungeon Points Tracker - AUTOMATICKÉ SBÍRÁNÍ")
-    print("="*80)
-    if debug:
-        print("🔍 DEBUG REŽIM AKTIVNÍ")
-    if is_ci:
-        print("🤖 Běží v CI prostředí (GitHub Actions)")
-    print(f"📁 Složka: {Path.cwd()}")
-    print(f"📄 JSON historie: dungeon_data.json")
-    print(f"📊 CSV výstup: dungeon_changes.csv")
-    print(f"🗺️ Mapa dungeonů: Dungeony2.csv")
-    print(f"⏰ Interval: každé 2 hodiny")
-    print(f"📅 Denní report: každých 24 hodin")
-    print("="*80)
     
-    # Pouze denní report
-    if daily_report_only:
-        print("\n📊 REŽIM DENNÍHO REPORTU")
-        tracker.generate_daily_dungeon_report()
-        print("\n✅ HOTOVO!")
-        return
-    
-    if manual or is_ci:
-        # Ruční režim nebo CI - spustí jednou a ukončí
-        print("\n🔧 RUČNÍ REŽIM - Spuštění jednou")
-        tracker.update(debug=debug)
-        print("\n✅ HOTOVO!")
-        return
-    
-    # Automatický režim
-    print("\n🔄 AUTOMATICKÝ REŽIM - běží na pozadí")
-    print("💡 Pro ukončení stiskněte Ctrl+C")
-    print("\n" + "="*80)
-    
-    # První spuštění ihned
-    print("\n🎯 Spouštím první kontrolu...")
-    run_scheduled_update(tracker, debug)
-    
-    # První denní report ihned
-    print("\n📊 Spouštím první denní report...")
-    run_daily_report(tracker)
-    
-    # Naplánuj další spuštění každé 2 hodiny
-    schedule.every(2).hours.do(run_scheduled_update, tracker, debug)
-    
-    # Naplánuj denní report každých 24 hodin
-    schedule.every(24).hours.do(run_daily_report, tracker)
-    
-    next_run = datetime.now().replace(microsecond=0)
-    next_run += timedelta(hours=2)
-    next_daily = datetime.now().replace(microsecond=0)
-    next_daily += timedelta(hours=24)
-    
-    print(f"\n⏰ Další kontrola naplánována na: {next_run.strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"📅 Další denní report naplánován na: {next_daily.strftime('%Y-%m-%d %H:%M:%S')}")
-    print("="*80)
-    
-    try:
-        while True:
-            schedule.run_pending()
-            time.sleep(60)  # Kontroluj každou minutu
-            
-    except KeyboardInterrupt:
-        print("\n\n⛔ Ukončuji program...")
-        print("✅ Data byla uložena")
-        print("\nDěkuji za použití! 👋")
-
-if __name__ == "__main__":
-    main()
