@@ -678,4 +678,64 @@ def main():
     tracker = DungeonPointsTracker()
     
     print("🚀 Dungeon Points Tracker - AUTOMATICKÉ SBÍRÁNÍ")
+    print("="*80)
+    
+    # Režim pouze pro denní report
+    if daily_report_only:
+        print("📊 Spouštím pouze denní report...")
+        tracker.generate_daily_dungeon_report()
+        return
+    
+    # Režim pouze pro denní souhrn
+    if daily_summary_only:
+        print("📅 Spouštím pouze denní souhrn...")
+        tracker.generate_daily_summary()
+        return
+    
+    # Režim pouze pro týdenní souhrn
+    if weekly_summary_only:
+        print("📅 Spouštím pouze týdenní souhrn...")
+        tracker.generate_weekly_summary()
+        return
+    
+    # Manuální režim - jednou a konec
+    if manual:
+        print("🔧 Manuální režim - jednorázová aktualizace")
+        tracker.update(debug=debug)
+        return
+    
+    # CI režim - jednou a konec
+    if is_ci:
+        print("🔧 CI režim - jednorázová aktualizace")
+        tracker.update(debug=debug)
+        return
+    
+    # Automatický režim
+    print("⏰ Automatický režim - kontrola každé 2 hodiny")
+    print("📊 Denní report: každý den v 23:00")
+    print("📅 Denní souhrn: každý den v 00:05")
+    print("📅 Týdenní souhrn: každé pondělí v 00:10")
+    print("💡 Pro ukončení stiskněte Ctrl+C")
+    print("="*80 + "\n")
+    
+    # První aktualizace hned
+    run_scheduled_update(tracker, debug=debug)
+    
+    # Nastavení scheduleru
+    schedule.every(2).hours.do(run_scheduled_update, tracker=tracker, debug=debug)
+    schedule.every().day.at("23:00").do(run_daily_report, tracker=tracker)
+    schedule.every().day.at("00:05").do(run_daily_summary, tracker=tracker)
+    schedule.every().monday.at("00:10").do(run_weekly_summary, tracker=tracker)
+    
+    # Nekonečná smyčka
+    try:
+        while True:
+            schedule.run_pending()
+            time.sleep(60)  # Kontrola každou minutu
+    except KeyboardInterrupt:
+        print("\n\n👋 Ukončuji program...")
+        print("="*80)
+
+if __name__ == "__main__":
+    main()
     
