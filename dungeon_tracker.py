@@ -17,6 +17,7 @@ import sys
 import schedule
 import os
 from collections import defaultdict
+import threading
 
 class DungeonPointsTracker:
     def __init__(self, data_file="dungeon_data.json", csv_file="dungeon_changes.csv", 
@@ -621,9 +622,13 @@ class DungeonPointsTracker:
         
         print(f"💾 Data uložena (celkem {len(self.history)} záznamů v historii)")
 
+
 def run_scheduled_update(tracker, debug=False):
     """Spustí aktualizaci a ošetří chyby"""
     try:
+        print(f"\n{'='*80}")
+        print(f"🔄 SPOUŠTÍM PRAVIDELNOU KONTROLU - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"{'='*80}")
         tracker.update(debug=debug)
     except KeyboardInterrupt:
         raise
@@ -632,9 +637,13 @@ def run_scheduled_update(tracker, debug=False):
         import traceback
         traceback.print_exc()
 
+
 def run_daily_report(tracker):
     """Spustí denní report"""
     try:
+        print(f"\n{'='*80}")
+        print(f"📊 SPOUŠTÍM DENNÍ REPORT - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"{'='*80}")
         tracker.generate_daily_dungeon_report()
     except KeyboardInterrupt:
         raise
@@ -643,9 +652,13 @@ def run_daily_report(tracker):
         import traceback
         traceback.print_exc()
 
+
 def run_daily_summary(tracker):
     """Spustí denní souhrn"""
     try:
+        print(f"\n{'='*80}")
+        print(f"📅 SPOUŠTÍM DENNÍ SOUHRN - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"{'='*80}")
         tracker.generate_daily_summary()
     except KeyboardInterrupt:
         raise
@@ -654,9 +667,13 @@ def run_daily_summary(tracker):
         import traceback
         traceback.print_exc()
 
+
 def run_weekly_summary(tracker):
     """Spustí týdenní souhrn"""
     try:
+        print(f"\n{'='*80}")
+        print(f"📅 SPOUŠTÍM TÝDENNÍ SOUHRN - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"{'='*80}")
         tracker.generate_weekly_summary()
     except KeyboardInterrupt:
         raise
@@ -664,6 +681,7 @@ def run_weekly_summary(tracker):
         print(f"\n❌ Chyba při týdenním souhrnu: {e}")
         import traceback
         traceback.print_exc()
+
 
 def main():
     """Hlavní funkce"""
@@ -719,6 +737,7 @@ def main():
     print("="*80 + "\n")
     
     # První aktualizace hned
+    print("🔄 Spouštím první kontrolu...")
     run_scheduled_update(tracker, debug=debug)
     
     # Nastavení scheduleru
@@ -726,6 +745,18 @@ def main():
     schedule.every().day.at("23:00").do(run_daily_report, tracker=tracker)
     schedule.every().day.at("00:05").do(run_daily_summary, tracker=tracker)
     schedule.every().monday.at("00:10").do(run_weekly_summary, tracker=tracker)
+    
+    print(f"\n✅ Scheduler nastaven. Další kontrola za 2 hodiny.")
+    print(f"⏰ Aktuální čas: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    
+    # Zobraz naplánované úlohy
+    next_run = schedule.next_run()
+    if next_run:
+        print(f"⏭️  Další úloha: {next_run.strftime('%Y-%m-%d %H:%M:%S')}")
+    
+    print("\n" + "="*80)
+    print("🔄 Čekám na další kontrolu...")
+    print("="*80 + "\n")
     
     # Nekonečná smyčka
     try:
@@ -735,7 +766,9 @@ def main():
     except KeyboardInterrupt:
         print("\n\n👋 Ukončuji program...")
         print("="*80)
+        print("✅ Program byl úspěšně ukončen")
+        print("="*80)
+
 
 if __name__ == "__main__":
     main()
-    
