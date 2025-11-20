@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
 Dungeon Points Tracker - AUTOMATICKÉ SBÍRÁNÍ každé 2 hodiny
 + Denní a týdenní vyhodnocení dungeonů do CSV
@@ -17,7 +18,6 @@ import sys
 import schedule
 import os
 from collections import defaultdict
-import threading
 
 class DungeonPointsTracker:
     def __init__(self, data_file="dungeon_data.json", csv_file="dungeon_changes.csv", 
@@ -178,8 +178,6 @@ class DungeonPointsTracker:
                     f.write(driver.page_source)
                 driver.save_screenshot('page_screenshot.png')
                 print("🔍 Debug: page_source.html a page_screenshot.png uloženy")
-            
-            page_text = driver.find_element(By.TAG_NAME, "body").text
             
             data = {}
             tables = driver.find_elements(By.TAG_NAME, "table")
@@ -533,8 +531,9 @@ class DungeonPointsTracker:
             print(f"   Aktivní dungeonů dnes: {recent_24h}")
             print(f"   Aktivní dungeonů tento týden: {recent_week}")
             
-            most_active = max(sorted_dungeons, key=lambda x: x[1]['count'])
-            print(f"   Nejčastější dungeon: {most_active[0]} ({most_active[1]['count']}x)")
+            if sorted_dungeons:
+                most_active = max(sorted_dungeons, key=lambda x: x[1]['count'])
+                print(f"   Nejčastější dungeon: {most_active[0]} ({most_active[1]['count']}x)")
             
             print("\n" + "="*100 + "\n")
             
