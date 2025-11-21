@@ -1,17 +1,11 @@
 name: Dungeon Points Tracker
 
 on:
-  # Spuštění každé 2 hodiny
+  # Automatické spouštění podle rozvrhu
   schedule:
-    - cron: '0 */2 * * *'  # Každé 2 hodiny (00:00, 02:00, 04:00, ...)
-  
-  # Denní souhrn každý den v 00:05
-  schedule:
-    - cron: '5 0 * * *'    # Každý den v 00:05
-  
-  # Týdenní souhrn každé pondělí v 00:10
-  schedule:
-    - cron: '10 0 * * 1'   # Každé pondělí v 00:10
+    - cron: '0 */2 * * *'   # Každé 2 hodiny (00:00, 02:00, 04:00, ...)
+    - cron: '5 0 * * *'     # Každý den v 00:05 (denní souhrn)
+    - cron: '10 0 * * 1'    # Každé pondělí v 00:10 (týdenní souhrn)
   
   # Manuální spuštění
   workflow_dispatch:
