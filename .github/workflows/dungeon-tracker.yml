@@ -1,0 +1,143 @@
+name: Dungeon Points Tracker
+
+on:
+  # Spuštění každé 2 hodiny
+  schedule:
+    - cron: '0 */2 * * *'  # Každé 2 hodiny (00:00, 02:00, 04:00, ...)
+  
+  # Denní souhrn každý den v 00:05
+  schedule:
+    - cron: '5 0 * * *'    # Každý den v 00:05
+  
+  # Týdenní souhrn každé pondělí v 00:10
+  schedule:
+    - cron: '10 0 * * 1'   # Každé pondělí v 00:10
+  
+  # Manuální spuštění
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Režim spuštění'
+        required: true
+        default: 'update'
+        type: choice
+        options:
+          - update
+          - daily-summary
+          - weekly-summary
+
+  # Spustit při push do main (volitelné)
+  push:
+    branches:
+      - main
+    paths:
+      - 'dungeon_tracker.py'
+      - '.github/workflows/*.yml'
+
+jobs:
+  update-data:
+    runs-on: ubuntu-latest
+    if: github.event.schedule == '0 */2 * * *' || github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'update')
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install selenium schedule
+          pip install webdriver-manager
+      
+      - name: Install Chrome and ChromeDriver
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget unzip
+          wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
+          sudo sh -c 'echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google-chrome.list'
+          sudo apt-get update
+          sudo apt-get install -y google-chrome-stable
+      
+      - name: Run tracker update
+        run: |
+          python dungeon_tracker.py --manual
+      
+      - name: Commit and push changes
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add dungeon_data.json dungeon_changes.csv
+          git diff --quiet && git diff --staged --quiet || git commit -m "🔄 Automatická aktualizace dat - $(date +'%Y-%m-%d %H:%M:%S')"
+          git push
+
+  daily-summary:
+    runs-on: ubuntu-latest
+    if: github.event.schedule == '5 0 * * *' || (github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'daily-summary')
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install selenium schedule
+      
+      - name: Generate daily summary
+        run: |
+          python dungeon_tracker.py --daily-summary
+      
+      - name: Commit and push changes
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add dungeony_souhrn.csv
+          git diff --quiet && git diff --staged --quiet || git commit -m "📅 Denní souhrn - $(date +'%Y-%m-%d')"
+          git push
+
+  weekly-summary:
+    runs-on: ubuntu-latest
+    if: github.event.schedule == '10 0 * * 1' || (github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'weekly-summary')
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install selenium schedule
+      
+      - name: Generate weekly summary
+        run: |
+          python dungeon_tracker.py --weekly-summary
+      
+      - name: Commit and push changes
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add dungeony_souhrn.csv
+          git diff --quiet && git diff --staged --quiet || git commit -m "📊 Týdenní souhrn - Týden $(date +'%V/%Y')"
+          git push
